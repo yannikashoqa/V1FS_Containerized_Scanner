@@ -1,0 +1,14 @@
+scanner:
+  # Enable Autoscaling Group
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  # Enable external LoadBalancer service for ICAP
+  externalService:
+    enabled: true
+    annotations: {}
+    icapPort: 1344          
