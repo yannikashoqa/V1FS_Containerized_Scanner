@@ -6,7 +6,8 @@ sudo apt update
 sudo apt upgrade -y
 
 sudo swapoff -a
-# Comment the swap entry in /etc/fstab 
+sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+# Comment the swap entry in /etc/fstab if the previous command did not work
 
 sudo modprobe overlay
 sudo modprobe br_netfilter

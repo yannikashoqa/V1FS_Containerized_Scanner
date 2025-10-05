@@ -1,8 +1,7 @@
 #!/bin/bash
 
-# Using Variable does not work
 mytoken=$(curl -X POST "https://api.xdr.trendmicro.com/beta/fileSecurity/ctr/registration" \
- -H "Authorization: Bearer YOUR_V1_API_KEY" \
+ -H "Authorization: Bearer Your_VisionOne_API_Key" \
  -H "Content-Type: application/json" | jq .token)
 
 #Strip quotes from variable
