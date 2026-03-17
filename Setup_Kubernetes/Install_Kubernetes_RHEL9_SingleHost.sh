@@ -1,7 +1,10 @@
 #!/bin/bash
 host_Name=$(hostname)
 
-#Disable swap and SELinux
+# Update the system
+sudo dnf update -y
+
+# Disable swap and SELinux
 sudo swapoff -a
 sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
 # Comment the swap entry in /etc/fstab if the previous command did not work
@@ -15,18 +18,6 @@ sudo systemctl stop firewalld
 
 # Disable the firewall service to prevent it from starting at boot
 sudo systemctl disable firewalld
-
-# Add Firewall Rules on Master and Worker Nodes
-# On Master Node
-#sudo firewall-cmd --permanent --add-port={6443,2379,2380,10250,10251,10252,10257,10259,179}/tcp
-#sudo firewall-cmd --permanent --add-port=4789/udp
-#sudo firewall-cmd --permanent --add-port=443/tcp  # Added to avoid error:  dial tcp 10.96.0.1:443: connect: no route to host
-#sudo firewall-cmd --reload
-
-# On worker Nodes
-# sudo firewall-cmd --permanent --add-port={179,10250,30000-32767}/tcp
-# sudo firewall-cmd --permanent --add-port=4789/udp
-# sudo firewall-cmd --reload
 
 # Add Kernel Modules and Parameters
 sudo modprobe overlay
@@ -55,13 +46,14 @@ sudo sed -i 's/SystemdCgroup \= false/SystemdCgroup \= true/g' /etc/containerd/c
 sudo systemctl restart containerd
 
 # Add Kubernetes Yum Repository
+Version="1.35"
 cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
 [kubernetes]
 name=Kubernetes
-baseurl=https://pkgs.k8s.io/core:/stable:/v1.30/rpm/
+baseurl=https://pkgs.k8s.io/core:/stable:/v$Version/rpm/
 enabled=1
 gpgcheck=1
-gpgkey=https://pkgs.k8s.io/core:/stable:/v1.30/rpm/repodata/repomd.xml.key
+gpgkey=https://pkgs.k8s.io/core:/stable:/v$Version/rpm/repodata/repomd.xml.key
 exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
 EOF
 
@@ -74,27 +66,31 @@ sudo systemctl enable kubelet
 # Initialize Kubernetes Cluster (master node only)
 sudo kubeadm init
 
+# Configure kubectl for the user
 mkdir -p $HOME/.kube
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
-# Use the following command to allow pods deployed on Master node
+# Uncoment the following command to allow pods deployed on Master node
 kubectl taint node $host_Name node-role.kubernetes.io/control-plane:NoSchedule-
 
 # Install Pod Network Add-On (Calico): 
-kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.3/manifests/calico.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.31.4/manifests/calico.yaml
 
 # Install helm
 curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
 chmod 700 get_helm.sh
 ./get_helm.sh
 
+
 # Install Metrics-Server
 # Remove node label exclude-from-external-load-balancers:
-kubectl label nodes $host_Name node.kubernetes.io/exclude-from-external-load-balancers-
+#kubectl label nodes $host_Name node.kubernetes.io/exclude-from-external-load-balancers-
 
-kubectl create ns metrics-server
 helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server
 helm repo update
-helm install metrics-server metrics-server/metrics-server -n  metrics-server
-helm upgrade metrics-server metrics-server/metrics-server --set args="{--kubelet-insecure-tls}" -n metrics-server
+
+helm upgrade --install metrics-server metrics-server/metrics-server \
+--namespace kube-system \
+--set args="{--secure-port=10251,--kubelet-insecure-tls}" \
+--set containerPort=10251
